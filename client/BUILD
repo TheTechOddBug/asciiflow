@@ -35,6 +35,7 @@ ts_library(
         "//:node_modules/react-router",
         "//:node_modules/react-router-dom",
         "//:node_modules/uuid",
+        "//:node_modules/zustand",
         "//common",
     ],
 )
@@ -43,6 +44,7 @@ ts_mocha_test_suite(
     srcs = glob(["**/*.spec.ts"]),
     deps = [
         ":client",
+        "//testing",
         "//:node_modules/@types/chai",
         "//:node_modules/@types/mocha",
         "//:node_modules/@types/node",
