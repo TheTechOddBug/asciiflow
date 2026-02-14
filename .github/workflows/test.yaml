@@ -8,12 +8,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checks out a copy of your repository.
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Builds code and runs the tests using Bazelisk.
-      - name: Run tests
-        uses: docker://mattinsler/bazelisk:latest
-        with:
-          args: bazel test ...
+      - name: Install Bazelisk
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/bazel https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          sudo chmod +x /usr/local/bin/bazel
+
+      - name: Run tests and build
+        run: bazel test //common:all //client:all --remote_cache= --bes_backend= --bes_results_url= && bazel build //client:site --remote_cache= --bes_backend= --bes_results_url=
+        timeout-minutes: 10
