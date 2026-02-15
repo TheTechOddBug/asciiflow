@@ -703,11 +703,18 @@ test("backspace erases committed text underneath", async ({ page }) => {
   await clickCell(page, 3, 0);
 
   // Backspace 3 times to erase all characters.
-  // Small delays between presses so each one is processed before the next.
-  const rv = await getRenderedVersion(page);
-  await page.keyboard.press("Backspace", { delay: 50 });
-  await page.keyboard.press("Backspace", { delay: 50 });
-  await page.keyboard.press("Backspace", { delay: 50 });
+  // Wait for render after each backspace to ensure the text tool processes
+  // each key individually (CI is slower than local).
+  let rv = await getRenderedVersion(page);
+  await page.keyboard.press("Backspace");
+  await waitForRender(page, rv);
+  rv = await getRenderedVersion(page);
+  await page.keyboard.press("Backspace");
+  await waitForRender(page, rv);
+  rv = await getRenderedVersion(page);
+  await page.keyboard.press("Backspace");
+  await waitForRender(page, rv);
+  rv = await getRenderedVersion(page);
   await page.keyboard.press("Enter");
   await waitForRender(page, rv);
 
