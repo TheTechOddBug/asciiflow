@@ -6,6 +6,11 @@ import { DrawingStringifier } from "#asciiflow/client/store/drawing_stringifier"
 import { ArrayStringifier, IStringifier, JSONStringifier } from "#asciiflow/common/stringifiers";
 import { IVector, Vector } from "#asciiflow/client/vector";
 
+// localStorage always stores offsets in the original pixel format (H=9, V=16).
+// We convert to/from current pixel sizes on read/write so existing data just works.
+const STORED_CHAR_PIXELS_H = 9;
+const STORED_CHAR_PIXELS_V = 16;
+
 function readPersistent<T>(
   key: string,
   defaultValue: T,
@@ -75,10 +80,17 @@ export class CanvasStore {
       new ArrayStringifier(Layer)
     );
     this._zoom = readPersistent(this.zoomKey, 1);
-    this._offset = readPersistent<IVector>(this.offsetKey, {
-      x: (constants.MAX_GRID_WIDTH * constants.CHAR_PIXELS_H) / 2,
-      y: (constants.MAX_GRID_HEIGHT * constants.CHAR_PIXELS_V) / 2,
-    });
+
+    const defaultOffset: IVector = {
+      x: (constants.MAX_GRID_WIDTH * STORED_CHAR_PIXELS_H) / 2,
+      y: (constants.MAX_GRID_HEIGHT * STORED_CHAR_PIXELS_V) / 2,
+    };
+    const storedOffset = readPersistent<IVector>(this.offsetKey, defaultOffset);
+    // Convert from stored pixel format (H=9, V=16) to current pixel sizes.
+    this._offset = {
+      x: (storedOffset.x / STORED_CHAR_PIXELS_H) * constants.CHAR_PIXELS_H,
+      y: (storedOffset.y / STORED_CHAR_PIXELS_V) * constants.CHAR_PIXELS_V,
+    };
   }
 
   public get zoom() {
@@ -97,7 +109,11 @@ export class CanvasStore {
 
   public setOffset(value: Vector) {
     this._offset = { x: value.x, y: value.y };
-    writePersistent(this.offsetKey, this._offset);
+    // Convert back to stored pixel format (H=9, V=16).
+    writePersistent(this.offsetKey, {
+      x: (value.x / constants.CHAR_PIXELS_H) * STORED_CHAR_PIXELS_H,
+      y: (value.y / constants.CHAR_PIXELS_V) * STORED_CHAR_PIXELS_V,
+    });
     this.notify();
   }
 

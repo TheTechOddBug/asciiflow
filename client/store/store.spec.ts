@@ -4,7 +4,9 @@ import "#asciiflow/testing/test_setup";
 import { assert } from "chai";
 import { Layer } from "#asciiflow/client/layer";
 import { Vector } from "#asciiflow/client/vector";
-import { useAppStore, store, ToolMode, DrawingId } from "#asciiflow/client/store/index";
+import { useAppStore, store, ToolMode, DrawingId, storageKey } from "#asciiflow/client/store/index";
+import * as constants from "#asciiflow/client/constants";
+import { CanvasStore } from "#asciiflow/client/store/canvas";
 
 describe("store facade", () => {
   beforeEach(() => {
@@ -169,5 +171,76 @@ describe("CanvasStore", () => {
 
     canvas.clear();
     assert.isNull(canvas.committed.get(new Vector(3, 3)));
+  });
+});
+
+describe("CanvasStore offset serialization", () => {
+  // Offsets are always stored in the original pixel format (H=9, V=16)
+  // and converted to/from current pixel sizes on read/write.
+  const STORED_H = 9;
+  const STORED_V = 16;
+
+  let version: number;
+  function notify() { version++; }
+
+  beforeEach(() => {
+    localStorage.clear();
+    version = 0;
+  });
+
+  it("should use default center offset when nothing is stored", () => {
+    const canvas = new CanvasStore(DrawingId.local("fresh"), notify);
+    const offset = canvas.offset;
+    // Default is grid center, converted from stored format to current pixels.
+    assert.equal(offset.x, (constants.MAX_GRID_WIDTH * constants.CHAR_PIXELS_H) / 2);
+    assert.equal(offset.y, (constants.MAX_GRID_HEIGHT * constants.CHAR_PIXELS_V) / 2);
+  });
+
+  it("should convert stored offset (H=9, V=16) to current pixel sizes on read", () => {
+    const id = DrawingId.local("read-test");
+    const key = storageKey(id, "offset");
+
+    // Stored in original pixel format: cell (100, 100) at H=9, V=16.
+    localStorage.setItem(key, JSON.stringify({ x: 900, y: 1600 }));
+
+    const canvas = new CanvasStore(id, notify);
+    const offset = canvas.offset;
+
+    // Runtime offset should be cell coords * current pixel sizes.
+    assert.equal(offset.x, 100 * constants.CHAR_PIXELS_H);
+    assert.equal(offset.y, 100 * constants.CHAR_PIXELS_V);
+  });
+
+  it("should convert back to stored pixel format (H=9, V=16) on write", () => {
+    const id = DrawingId.local("write-test");
+    const key = storageKey(id, "offset");
+
+    const canvas = new CanvasStore(id, notify);
+    // setOffset receives current pixel coords.
+    // Cell (10, 20) in current pixels:
+    const pixelX = 10 * constants.CHAR_PIXELS_H;
+    const pixelY = 20 * constants.CHAR_PIXELS_V;
+    canvas.setOffset(new Vector(pixelX, pixelY));
+
+    // Should be stored as cell (10, 20) in original pixel format.
+    const stored = JSON.parse(localStorage.getItem(key)!);
+    assert.equal(stored.x, 10 * STORED_H);
+    assert.equal(stored.y, 20 * STORED_V);
+  });
+
+  it("should round-trip: read then write preserves stored value", () => {
+    const id = DrawingId.local("roundtrip");
+    const key = storageKey(id, "offset");
+
+    const original = { x: 450, y: 800 };
+    localStorage.setItem(key, JSON.stringify(original));
+
+    const canvas = new CanvasStore(id, notify);
+    // Re-persist the loaded offset.
+    canvas.setOffset(canvas.offset);
+
+    const stored = JSON.parse(localStorage.getItem(key)!);
+    assert.equal(stored.x, original.x);
+    assert.equal(stored.y, original.y);
   });
 });
