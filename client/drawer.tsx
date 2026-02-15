@@ -402,14 +402,14 @@ export function Drawer() {
                 new line without committing your changes. Use the{" "}
                 <ShortcutChip label={"arrow keys"} /> to move around.
               </ToolHelp>{" "}
-              Pan around the canvas by holding <ShortcutChip label="space" />
-              {route.shareSpec ? (
-                "."
-              ) : (
+              Scroll to pan.{" "}
+              <ShortcutChip label="shift + scroll" /> to pan horizontally.{" "}
+              <ShortcutChip label="middle-click drag" /> to pan freely.{" "}
+              <ShortcutChip label={`${ctrlOrCmd()} + scroll`} /> to zoom.
+              {!route.shareSpec && (
                 <>
                   {" "}
-                  and dragging with the mouse. Use{" "}
-                  <ShortcutChip label={`${ctrlOrCmd()} + z`} /> to undo and{" "}
+                  <ShortcutChip label={`${ctrlOrCmd()} + z`} /> to undo,{" "}
                   <ShortcutChip label={`${ctrlOrCmd()} + shift + z`} /> to
                   redo.
                 </>

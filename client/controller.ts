@@ -150,19 +150,12 @@ export class Controller {
     if (event.keyCode === 39) {
       specialKeyCode = constants.KEY_RIGHT;
     }
-    if (event.keyCode === 32) {
-      store.setPanning(true);
-    }
-
     if (specialKeyCode != null) {
       store.currentTool.handleKey(specialKeyCode, getModifierKeys(event));
     }
   }
 
   handleKeyUp(event: KeyboardEvent) {
-    if (event.keyCode === 32) {
-      store.setPanning(false);
-    }
     if (!event.altKey) {
       store.setAltPressed(false);
     }
@@ -217,17 +210,25 @@ export class DesktopController {
     return {
       onMouseDown: this.handleMouseDown,
       onMouseUp: this.handleMouseUp,
-      onWheel: this.handleWheel,
       onMouseMove: this.handleMouseMove,
+      onAuxClick: this.handleAuxClick,
     };
   }
 
   handleMouseDown = (e: React.MouseEvent<any>) => {
-    // Can drag by holding either the control or meta (Apple) key.
-    if (store.panning) {
+    // Middle mouse button (button === 1) pans the canvas (Figma-style).
+    if (e.button === 1) {
+      e.preventDefault();
       this.controller.startDrag(Vector.fromMouseEvent(e));
     } else {
       this.controller.startDraw(Vector.fromMouseEvent(e), e);
+    }
+  };
+
+  // Suppress middle-click paste (X11 primary selection) on Linux.
+  handleAuxClick = (e: React.MouseEvent<any>) => {
+    if (e.button === 1) {
+      e.preventDefault();
     }
   };
 
@@ -239,13 +240,37 @@ export class DesktopController {
     this.controller.endAll();
   };
 
-  handleWheel = (e: React.WheelEvent<any>) => {
-    // Use deltaY for vertical scroll, fallback to deltaX for horizontal scroll wheels.
-    const rawDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-    if (rawDelta === 0) return;
-    const delta = -rawDelta;
-    const newZoom = store.currentCanvas.zoom * (delta > 0 ? 1.1 : 0.9);
-    store.currentCanvas.setZoom(Math.max(Math.min(newZoom, 5), 0.2));
+  /**
+   * Scroll = pan, Ctrl/Cmd+scroll = zoom (Figma-style).
+   * Trackpad pinch-to-zoom fires synthetic wheel events with ctrlKey=true,
+   * so this also handles pinch gestures automatically.
+   * Registered via addEventListener({ passive: false }) in app.tsx so that
+   * preventDefault() can suppress browser page zoom on Ctrl+scroll.
+   */
+  handleWheel = (e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom: Ctrl/Cmd + scroll (also captures trackpad pinch).
+      e.preventDefault();
+      const rawDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      if (rawDelta === 0) return;
+      const delta = -rawDelta;
+      const newZoom = store.currentCanvas.zoom * (delta > 0 ? 1.1 : 0.9);
+      store.currentCanvas.setZoom(Math.max(Math.min(newZoom, 5), 0.2));
+    } else {
+      // Pan: plain scroll moves the canvas.
+      // Shift+scroll converts vertical scroll to horizontal pan, for mice
+      // without a horizontal scroll wheel.
+      const zoom = store.currentCanvas.zoom;
+      const offset = store.currentCanvas.offset;
+      const dx = e.shiftKey ? (e.deltaX || e.deltaY) : e.deltaX;
+      const dy = e.shiftKey ? 0 : e.deltaY;
+      store.currentCanvas.setOffset(
+        new Vector(
+          offset.x + dx / zoom,
+          offset.y + dy / zoom
+        )
+      );
+    }
   };
 
   handleMouseMove = (e: React.MouseEvent<any>) => {
