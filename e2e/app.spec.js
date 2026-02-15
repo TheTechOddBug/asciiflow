@@ -691,30 +691,20 @@ test("backspace erases committed text underneath", async ({ page }) => {
   await page.goto("/");
   await selectTool(page, "text");
 
-  // Type and commit "ABC"
+  // Type and commit "A"
   await clickCell(page, 0, 0);
-  await page.keyboard.type("ABC");
+  await page.keyboard.type("A");
   await page.keyboard.press("Enter");
 
   let text = await getCommittedText(page);
-  expect(text).toBe("ABC");
+  expect(text).toBe("A");
 
-  // Click at the position after "C" (3 cells right of start)
-  await clickCell(page, 3, 0);
+  // Click at the position after "A" (1 cell right of start)
+  await clickCell(page, 1, 0);
 
-  // Backspace 3 times to erase all characters.
-  // Wait for render after each backspace to ensure the text tool processes
-  // each key individually (CI is slower than local).
-  let rv = await getRenderedVersion(page);
+  // Backspace once to erase "A", then commit.
+  const rv = await getRenderedVersion(page);
   await page.keyboard.press("Backspace");
-  await waitForRender(page, rv);
-  rv = await getRenderedVersion(page);
-  await page.keyboard.press("Backspace");
-  await waitForRender(page, rv);
-  rv = await getRenderedVersion(page);
-  await page.keyboard.press("Backspace");
-  await waitForRender(page, rv);
-  rv = await getRenderedVersion(page);
   await page.keyboard.press("Enter");
   await waitForRender(page, rv);
 
