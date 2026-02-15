@@ -2,17 +2,13 @@ import { Box } from "#asciiflow/client/common";
 import {
   isSpecial,
   KEY_BACKSPACE,
-  KEY_COPY,
-  KEY_CUT,
   KEY_DELETE,
-  KEY_PASTE,
 } from "#asciiflow/client/constants";
 import { AbstractDrawFunction } from "#asciiflow/client/draw/function";
 import { DrawMove } from "#asciiflow/client/draw/move";
 import { Layer } from "#asciiflow/client/layer";
 import { snap } from "#asciiflow/client/snap";
-import { IModifierKeys, store, ToolMode } from "#asciiflow/client/store";
-import { layerToText, textToLayer } from "#asciiflow/client/text_utils";
+import { IModifierKeys, store } from "#asciiflow/client/store";
 import { Vector } from "#asciiflow/client/vector";
 
 export class DrawSelect extends AbstractDrawFunction {
@@ -139,30 +135,25 @@ export class DrawSelect extends AbstractDrawFunction {
     return "default";
   }
 
+  /**
+   * Erases the selected content (called from native cut event in app.tsx).
+   */
+  cutSelection() {
+    if (this.selectBox == null) return;
+    const layer = new Layer();
+    store.currentCanvas.committed.entries().forEach(([key]) => {
+      if (this.selectBox.contains(key)) {
+        layer.set(key, "");
+      }
+    });
+
+    layer.setFrom(snap(layer, store.currentCanvas.committed));
+
+    store.currentCanvas.setScratchLayer(layer);
+    store.currentCanvas.commitScratch();
+  }
+
   handleKey(value: string, modifierKeys: IModifierKeys) {
-    if (this.selectBox != null) {
-      // Use the native keyboard for copy pasting.
-      if (value === KEY_COPY || value === KEY_CUT) {
-        const copiedText = layerToText(
-          store.currentCanvas.committed,
-          this.selectBox
-        );
-        navigator.clipboard.writeText(copiedText);
-      }
-      if (value === KEY_CUT) {
-        const layer = new Layer();
-        store.currentCanvas.committed.entries().forEach(([key]) => {
-          if (this.selectBox.contains(key)) {
-            layer.set(key, "");
-          }
-        });
-
-        layer.setFrom(snap(layer, store.currentCanvas.committed));
-
-        store.currentCanvas.setScratchLayer(layer);
-        store.currentCanvas.commitScratch();
-      }
-    }
     if (value === KEY_BACKSPACE || value === KEY_DELETE) {
       const layer = new Layer();
       store.currentCanvas.committed.entries().forEach(([key]) => {
@@ -176,8 +167,5 @@ export class DrawSelect extends AbstractDrawFunction {
       store.currentCanvas.setScratchLayer(layer);
       store.currentCanvas.commitScratch();
     }
-
-    // store.setToolMode(ToolMode.TEXT);
-    // store.currentTool.handleKey(value, modifierKeys);
   }
 }

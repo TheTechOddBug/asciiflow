@@ -50,13 +50,15 @@ export function textToLayer(value: string, offset?: Vector) {
     offset = new Vector(0, 0);
   }
   const layer = new Layer();
-  const lines = value.split("\n");
+  // Normalise line endings: \r\n (Windows) and \r (old Mac) → \n.
+  const lines = value.replace(/\r\n?/g, "\n").split("\n");
 
   for (let j = 0; j < lines.length; j++) {
     const line = lines[j];
     for (let i = 0; i < line.length; i++) {
       const char = line.charAt(i);
-      if (char !== " ") {
+      // Skip spaces and control characters (ASCII 0–31, 127 DEL).
+      if (char !== " " && char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127) {
         layer.set(new Vector(i, j).add(offset), char);
       }
     }

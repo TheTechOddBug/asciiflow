@@ -558,6 +558,104 @@ test("space inserts space in text mode (#195, #297)", async ({ page }) => {
 });
 
 // ---------------------------------------------------------------------------
+// Copy / Paste (#187, #338)
+// ---------------------------------------------------------------------------
+
+test("select box, copy, paste duplicates it", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  // Draw a box.
+  await selectTool(page, "boxes");
+  await drag(page, -2, -1, 2, 2);
+
+  const textBefore = await getCommittedText(page);
+  expect(textBefore.split("\n")).toEqual(["┌───┐", "│   │", "│   │", "└───┘"]);
+
+  // Select the box area (start from empty cell so we get a selection,
+  // not a move — starting on a special character triggers move mode).
+  await selectTool(page, "select---move");
+  await drag(page, -3, -2, 3, 3);
+
+  // Copy.
+  await page.keyboard.press("Control+c");
+
+  // Verify clipboard content contains the box.
+  const clipboardText = await page.evaluate(() =>
+    navigator.clipboard.readText()
+  );
+  expect(clipboardText).toContain("┌───┐");
+  expect(clipboardText).toContain("└───┘");
+
+  // Click somewhere else to clear the selection, then paste.
+  await clickCell(page, 10, 0);
+
+  const rv = await getRenderedVersion(page);
+  await page.keyboard.press("Control+v");
+  await waitForRender(page, rv);
+
+  const textAfter = await getCommittedText(page);
+  // Should have two boxes now (two top-left corners).
+  const cornerCount = (textAfter.match(/┌/g) || []).length;
+  expect(cornerCount).toBe(2);
+});
+
+test("paste text with Windows line endings strips \\r (#187)", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  // Write text with \r\n to the clipboard via the browser API.
+  await page.evaluate(() =>
+    navigator.clipboard.writeText("AB\r\nCD")
+  );
+
+  // Paste.
+  const rv = await getRenderedVersion(page);
+  await page.keyboard.press("Control+v");
+  await waitForRender(page, rv);
+
+  const text = await getCommittedText(page);
+  expect(text.split("\n")).toEqual(["AB", "CD"]);
+});
+
+test("cut removes selection and puts text on clipboard", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/");
+
+  // Draw a box.
+  await selectTool(page, "boxes");
+  await drag(page, -2, -1, 2, 2);
+
+  const textBefore = await getCommittedText(page);
+  expect(textBefore).toContain("┌───┐");
+
+  // Select the box area (start from empty cell so we get a selection,
+  // not a move — starting on a special character triggers move mode).
+  await selectTool(page, "select---move");
+  await drag(page, -3, -2, 3, 3);
+
+  // Cut.
+  await page.keyboard.press("Control+x");
+  await page.waitForTimeout(200);
+
+  // Clipboard should have the box text.
+  const clipboardText = await page.evaluate(() =>
+    navigator.clipboard.readText()
+  );
+  expect(clipboardText).toContain("┌───┐");
+
+  // Canvas should be empty after cut.
+  const textAfter = await getCommittedText(page);
+  expect(textAfter).toBe("");
+});
+
+// ---------------------------------------------------------------------------
 // Sidebar collapse / expand
 // ---------------------------------------------------------------------------
 

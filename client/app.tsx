@@ -100,9 +100,34 @@ document.getElementById("root").addEventListener(
   { passive: false }
 );
 
+// Use native copy/cut events so the browser handles clipboard permissions.
+// This works across Chrome, Safari, and Firefox (including macOS).
+document.addEventListener("copy", (e) => {
+  if (store.selectTool.selectBox) {
+    e.preventDefault();
+    const copiedText = layerToText(
+      store.currentCanvas.committed,
+      store.selectTool.selectBox
+    );
+    e.clipboardData.setData("text/plain", copiedText);
+  }
+});
+
+document.addEventListener("cut", (e) => {
+  if (store.selectTool.selectBox) {
+    e.preventDefault();
+    const copiedText = layerToText(
+      store.currentCanvas.committed,
+      store.selectTool.selectBox
+    );
+    e.clipboardData.setData("text/plain", copiedText);
+    // Perform the cut (erase selected content).
+    store.selectTool.cutSelection();
+  }
+});
+
 document.addEventListener("paste", (e) => {
   e.preventDefault();
-  // Text tool manages pasting it's own way.
   const clipboardText = e.clipboardData.getData("text");
   // Default to the center of the screen.
   var position = screenToCell(new Vector(window.innerWidth / 2, window.innerHeight / 2));

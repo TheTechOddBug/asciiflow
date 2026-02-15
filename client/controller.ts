@@ -94,12 +94,9 @@ export class Controller {
       }
     }
     if (event.ctrlKey || event.metaKey) {
-      if (event.keyCode === 67) {
-        specialKeyCode = constants.KEY_COPY;
-      }
-      if (event.keyCode === 86) {
-        specialKeyCode = constants.KEY_PASTE;
-      }
+      // Copy (Ctrl+C), Cut (Ctrl+X), and Paste (Ctrl+V) are handled by
+      // native copy/cut/paste events in app.tsx — don't intercept them here
+      // so the browser fires those events with proper clipboard permissions.
       if (event.keyCode === 90) {
         if (event.shiftKey) {
           store.currentCanvas.redo();
@@ -121,9 +118,6 @@ export class Controller {
         store.currentCanvas.redo();
         // Disable browser-specific behavior on Cmd/Ctrl+Y: https://github.com/lewish/asciiflow/issues/189
         event.preventDefault();
-      }
-      if (event.keyCode === 88) {
-        specialKeyCode = constants.KEY_CUT;
       }
     }
 
