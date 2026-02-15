@@ -3,7 +3,7 @@ import { FONT_SPEC, CHAR_BASELINE } from "#asciiflow/client/font";
 import { store, useAppStore } from "#asciiflow/client/store";
 import { Vector } from "#asciiflow/client/vector";
 import * as React from "react";
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 /**
  * Handles view operations, state and management of the screen.
@@ -13,21 +13,13 @@ import { useEffect } from "react";
 export let renderedVersion = 0;
 
 function getColors() {
-  if (store.darkMode) {
-    return {
-      background: "#333",
-      grid: "#444",
-      text: "#DDD",
-      highlight: "#444",
-      selection: "#456",
-    };
-  }
+  const style = getComputedStyle(document.documentElement);
   return {
-    background: "#FFF",
-    grid: "#EEE",
-    text: "#333",
-    highlight: "#F6F6F6",
-    selection: "#DEF",
+    background: style.getPropertyValue("--color-canvas-bg").trim() || "#eceff4",
+    grid: style.getPropertyValue("--color-canvas-grid").trim() || "#d8dee9",
+    text: style.getPropertyValue("--color-canvas-text").trim() || "#2e3440",
+    highlight: style.getPropertyValue("--color-canvas-highlight").trim() || "#e5e9f0",
+    selection: style.getPropertyValue("--color-canvas-selection").trim() || "#81a1c1",
   };
 }
 
@@ -40,8 +32,15 @@ export function setCanvasCursor(cursor: string) {
 
 export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) => {
   const darkMode = useAppStore((s) => s.darkMode);
+  const showGrid = useAppStore((s) => s.showGrid);
   const canvasVersion = useAppStore((s) => s.canvasVersion);
   const route = useAppStore((s) => s.route);
+
+  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  const [dims, setDims] = useState({
+    w: document.documentElement.clientWidth,
+    h: document.documentElement.clientHeight,
+  });
 
   const colors = getColors();
 
@@ -54,13 +53,10 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) => {
 
   useEffect(() => {
     const handler = () => {
-      const canvas = document.getElementById(
-        "ascii-canvas"
-      ) as HTMLCanvasElement;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = document.documentElement.clientWidth * dpr;
-      canvas.height = document.documentElement.clientHeight * dpr;
-      render(canvas);
+      setDims({
+        w: document.documentElement.clientWidth,
+        h: document.documentElement.clientHeight,
+      });
     };
     window.addEventListener("resize", handler);
     return () => {
@@ -68,12 +64,10 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) => {
     };
   }, []);
 
-  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-
   return (
     <canvas
-      width={document.documentElement.clientWidth * dpr}
-      height={document.documentElement.clientHeight * dpr}
+      width={dims.w * dpr}
+      height={dims.h * dpr}
       tabIndex={0}
       style={{
         backgroundColor: colors.background,
@@ -81,8 +75,8 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) => {
         position: "fixed",
         left: 0,
         top: 0,
-        width: document.documentElement.clientWidth,
-        height: document.documentElement.clientHeight,
+        width: dims.w,
+        height: dims.h,
       }}
       id="ascii-canvas"
       {...rest}
@@ -99,6 +93,7 @@ function render(canvas: HTMLCanvasElement) {
   const committed = store.currentCanvas.committed;
   const scratch = store.currentCanvas.scratch;
   const selection = store.currentCanvas.selection;
+  const showGrid = store.showGrid;
 
   const dpr = window.devicePixelRatio || 1;
   const context = canvas.getContext("2d");
@@ -138,24 +133,26 @@ function render(canvas: HTMLCanvasElement) {
   const colors = getColors();
 
   // Render the grid.
-  context.lineWidth = 1;
-  context.strokeStyle = colors.grid;
-  context.beginPath();
-  for (let i = startOffset.x; i < endOffset.x; i++) {
-    context.moveTo(i * constants.CHAR_PIXELS_H - offset.x, 0 - offset.y);
-    context.lineTo(
-      i * constants.CHAR_PIXELS_H - offset.x,
-      2000 * constants.CHAR_PIXELS_V - offset.y
-    );
+  if (showGrid) {
+    context.lineWidth = 1;
+    context.strokeStyle = colors.grid;
+    context.beginPath();
+    for (let i = startOffset.x; i < endOffset.x; i++) {
+      context.moveTo(i * constants.CHAR_PIXELS_H - offset.x, 0 - offset.y);
+      context.lineTo(
+        i * constants.CHAR_PIXELS_H - offset.x,
+        2000 * constants.CHAR_PIXELS_V - offset.y
+      );
+    }
+    for (let j = startOffset.y; j < endOffset.y; j++) {
+      context.moveTo(0 - offset.x, j * constants.CHAR_PIXELS_V - offset.y);
+      context.lineTo(
+        2000 * constants.CHAR_PIXELS_H - offset.x,
+        j * constants.CHAR_PIXELS_V - offset.y
+      );
+    }
+    context.stroke();
   }
-  for (let j = startOffset.y; j < endOffset.y; j++) {
-    context.moveTo(0 - offset.x, j * constants.CHAR_PIXELS_V - offset.y);
-    context.lineTo(
-      2000 * constants.CHAR_PIXELS_H - offset.x,
-      j * constants.CHAR_PIXELS_V - offset.y
-    );
-  }
-  context.stroke();
   context.font = FONT_SPEC;
 
   function highlight(position: Vector, color: string) {

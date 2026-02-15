@@ -1,21 +1,10 @@
-import {
-  Button,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Snackbar,
-  TextareaAutosize,
-} from "@material-ui/core";
 import { ASCII, UNICODE } from "#asciiflow/client/constants";
-import styles from "#asciiflow/client/export.module.css";
+import styles from "#asciiflow/client/toolbar.module.css";
 import { DrawingId, store, useAppStore } from "#asciiflow/client/store";
 import { layerToText } from "#asciiflow/client/text_utils";
+import {
+  Toast,
+} from "#asciiflow/client/ui/components";
 import * as React from "react";
 
 export interface IExportConfig {
@@ -24,150 +13,176 @@ export interface IExportConfig {
   characters?: "basic" | "extended";
 }
 
-export function ExportDialog({
-  button,
-  drawingId,
+// ---------------------------------------------------------------------------
+// Custom terminal-style dropdown
+// ---------------------------------------------------------------------------
+
+function TermSelect({
+  label,
+  color,
+  value,
+  options,
+  onChange,
 }: {
-  button: React.ReactNode;
-  drawingId: DrawingId;
+  label: string;
+  color?: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <div className={styles.exportSelect}>
+      <span className={styles.exportSelectLabel}>{label}</span>
+      <div className={styles.customSelect} ref={ref}>
+        <button
+          className={styles.customSelectTrigger}
+          style={color ? { color } : undefined}
+          onClick={() => setOpen(!open)}
+        >
+          {current ? current.label : value}{" "}
+          <span className={styles.customSelectChevron} style={color ? { color } : undefined}>{open ? "\u25b2" : "\u25bc"}</span>
+        </button>
+        {open && (
+          <div className={styles.customSelectPanel}>
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                className={[
+                  styles.customSelectOption,
+                  opt.value === value ? styles.customSelectOptionActive : "",
+                ].filter(Boolean).join(" ")}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+              >
+                {opt.value === value ? "> " : "  "}{opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export panel
+// ---------------------------------------------------------------------------
+
+export function ExportPanel({
+  drawingId,
+}: {
+  drawingId: DrawingId;
+}) {
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [toastOpen, setToastOpen] = React.useState(false);
   const exportConfig = useAppStore((s) => s.exportConfig);
-  const darkMode = useAppStore((s) => s.darkMode);
   const canvasVersion = useAppStore((s) => s.canvasVersion);
 
-  // Only compute the text if the dialog is open.
-  const drawingText = open
-    ? applyConfig(layerToText(store.canvas(drawingId).committed), exportConfig)
-    : "";
+  const drawingText = applyConfig(
+    layerToText(store.canvas(drawingId).committed),
+    exportConfig
+  );
+
   return (
     <>
-      <span onClick={(e) => setOpen(true)}>{button}</span>
-      <Dialog
-        open={Boolean(open)}
-        onClose={() => setOpen(null)}
-        className={darkMode ? "dark" : ""}
-        data-testid="export-dialog"
-      >
-        <DialogTitle>Export drawing</DialogTitle>
-        <DialogContent>
-          <FormControl className={styles.formControl}>
-            <InputLabel>Character set</InputLabel>
-            <Select
+      <div className={styles.exportPanel} data-testid="export-dialog">
+        <div className={styles.exportRow}>
+          <div className={styles.exportOptions}>
+            <TermSelect
+              label="character set:"
+              color="var(--color-cyan)"
               value={exportConfig.characters ?? "extended"}
-              onChange={(e) =>
+              options={[
+                { value: "extended", label: "extended" },
+                { value: "basic", label: "basic" },
+              ]}
+              onChange={(v) =>
                 store.setExportConfig({
                   ...exportConfig,
-                  characters: e.target.value as any,
+                  characters: v as any,
                 })
               }
-            >
-              <MenuItem value={"extended"}>ASCII Extended</MenuItem>
-              <MenuItem value={"basic"}>ASCII Basic</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogContent>
-          <FormControl className={styles.formControl}>
-            <InputLabel>Comment type</InputLabel>
-            <Select
+            />
+            <TermSelect
+              label="wrap:"
+              color="var(--color-purple)"
               value={exportConfig.wrapper || "none"}
-              onChange={(e) =>
+              options={[
+                { value: "none", label: "none" },
+                { value: "star", label: "/* */" },
+                { value: "star-filled", label: "/***/" },
+                { value: "triple-quotes", label: '""" """' },
+                { value: "hash", label: "# hash" },
+                { value: "slash", label: "// slash" },
+                { value: "three-slashes", label: "/// triple" },
+                { value: "dash", label: "-- dash" },
+                { value: "apostrophe", label: "' apostrophe" },
+                { value: "backticks", label: "``` backticks" },
+                { value: "four-spaces", label: "    indent" },
+                { value: "semicolon", label: "; semicolon" },
+              ]}
+              onChange={(v) =>
                 store.setExportConfig({
                   ...exportConfig,
-                  wrapper: e.target.value as any,
+                  wrapper: v === "none" ? undefined : (v as any),
                 })
               }
+            />
+          </div>
+          <div className={styles.exportActions}>
+            <button
+              className={styles.actionBtn}
+              style={{ color: "var(--color-success)" }}
+              data-testid="copy-to-clipboard"
+              onClick={async () => {
+                await navigator.clipboard.writeText(drawingText);
+                setToastOpen(true);
+              }}
             >
-              <MenuItem value={"none"}>None</MenuItem>
-              <MenuItem value={"star"}>
-                Standard multi-line <CommentTypeChip label="/* */" />
-              </MenuItem>
-              <MenuItem value={"star-filled"}>
-                Filled multi-line <CommentTypeChip label="/***/" />
-              </MenuItem>
-              <MenuItem value={"triple-quotes"}>
-                Quotes multi-line <CommentTypeChip label='""" """' />
-              </MenuItem>
-              <MenuItem value={"hash"}>
-                Hashes <CommentTypeChip label="#" />
-              </MenuItem>
-              <MenuItem value={"slash"}>
-                Slashes <CommentTypeChip label="//" />
-              </MenuItem>
-              <MenuItem value={"three-slashes"}>
-                Three Slashes <CommentTypeChip label="///" />
-              </MenuItem>
-              <MenuItem value={"dash"}>
-                Dashes <CommentTypeChip label="--" />
-              </MenuItem>
-              <MenuItem value={"apostrophe"}>
-                Apostrophies <CommentTypeChip label="'" />
-              </MenuItem>
-              <MenuItem value={"backticks"}>
-                Backticks multi-line <CommentTypeChip label="``` ```" />
-              </MenuItem>
-              <MenuItem value={"four-spaces"}>
-                Four Spaces <CommentTypeChip label="    " />
-              </MenuItem>
-              <MenuItem value={"semicolon"}>
-                Semicolons <CommentTypeChip label=";" />
-              </MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogContent>
-          <TextareaAutosize value={drawingText} className={styles.textArea} data-testid="export-text" />
-        </DialogContent>
-        <DialogActions>
-          <CopyToClipboardButton text={drawingText} />
-          <Button onClick={() => setOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-}
-
-function CommentTypeChip({ label }: { label: React.ReactNode }) {
-  return (
-    <Chip
-      style={{ marginLeft: "5px" }}
-      label={
-        <span style={{ fontFamily: "'Source Code Pro', monospace", fontSize: 12 }}>{label}</span>
-      }
-      size="small"
-    />
-  );
-}
-
-function CopyToClipboardButton({ text }: { text: string }) {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <Button
-        color="primary"
-        data-testid="copy-to-clipboard"
-        onClick={async () => {
-          await navigator.clipboard.writeText(text);
-          setOpen(true);
-        }}
-      >
-        Copy to clipboard
-      </Button>
-      <Snackbar
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
-        }}
-        open={open}
-        autoHideDuration={3000}
-        onClose={() => setOpen(false)}
-        message="Copied drawing to clipboard"
-        action={
-          <Button color="secondary" size="small" onClick={() => setOpen(false)}>
-            Dismiss
-          </Button>
-        }
+              [copy to clipboard]
+            </button>
+            <button
+              className={styles.actionBtn}
+              style={{ color: "var(--color-accent)" }}
+              onClick={() => setPreviewOpen(!previewOpen)}
+            >
+              [{previewOpen ? "close preview" : "preview"}]
+            </button>
+          </div>
+        </div>
+        {previewOpen && (
+          <div className={styles.exportPreview}>
+            <pre
+              className={styles.exportPreviewText}
+              data-testid="export-text"
+            >
+              {drawingText}
+            </pre>
+          </div>
+        )}
+      </div>
+      <Toast
+        open={toastOpen}
+        message="copied to clipboard"
+        onClose={() => setToastOpen(false)}
       />
     </>
   );
