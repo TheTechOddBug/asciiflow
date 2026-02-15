@@ -20,5 +20,5 @@ jobs:
         run: npx playwright@1.58.2 install --with-deps chromium
 
       - name: Run tests and build
-        run: bazel test //... --remote_cache= --bes_backend= --bes_results_url= && bazel build //client:site --remote_cache= --bes_backend= --bes_results_url=
+        run: bazel test //common:all //client:all //e2e:all --remote_cache= --bes_backend= --bes_results_url= && bazel build //client:site --remote_cache= --bes_backend= --bes_results_url=
         timeout-minutes: 10
